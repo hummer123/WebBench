@@ -95,6 +95,11 @@ static void alarm_handler(int signal)
     timerexpired=1;
 }	
 
+static void signal_usr1(int signal)
+{
+	/* nothing */
+}
+
 static void usage(void)
 {
     fprintf(stderr,
@@ -343,7 +348,10 @@ static int bench(void)
     int i,j,k;	
     pid_t pid=0;
     FILE *f;
-
+	pid_t *pids = NULL;		//record process pid
+	struct sigaction sa;	//同步各个子进程用
+	
+	
     /* check avaibility of target server */
     i=Socket(proxyhost==NULL?host:proxyhost,proxyport);
     if(i<0) { 
@@ -366,18 +374,35 @@ static int bench(void)
     while(time(NULL)==cas)
     sched_yield();
     */
-
+	
+	pids = (pid_t *)malloc(sizeof(pid_t)*clients);
+	if(pids == NULL)
+	{
+		fprintf(stderr,"pids malloc error\n");
+        return 3;
+	}
+	
     /* fork childs */
-    for(i=0;i<clients;i++)
-    {
-        pid=fork();
-        if(pid <= (pid_t) 0)
-        {
-            /* child process or error*/
-            sleep(1); /* make childs faster */
-            break;
-        }
-    }
+	for(i=0; i<clients; ++i)
+	{
+		pid = fork();
+		if(pid <= (pid_t)0)
+		{
+			break;
+		}
+		/* record child pid */
+		*(pids+i) = pid;
+		usleep(500);		/* make childs faster */
+		
+		/* after fork last child, start all clients */
+		if(i == (clients - 1))
+		{
+			for(k=0; k<=i; ++k)
+				kill(*(pids+k), SIGUSR1);	//向子进程发送信号，从子进程的pause继续执行
+			k = 0;
+		}
+	}
+	free(pids);		//free pids
 
     if( pid < (pid_t) 0)
     {
@@ -389,6 +414,13 @@ static int bench(void)
     if(pid == (pid_t) 0)
     {
         /* I am a child */
+		sa.sa_handler = signal_usr1;
+		sa.sa_flags = 0;
+		if(sigaction(SIGUSR1, &sa, NULL))
+			exit(3);
+		
+		pause(); //等待所有子进程都分配OK, i == clients - 1
+		
         if(proxyhost==NULL)
             benchcore(host,proxyport,request);
         else
