@@ -53,6 +53,19 @@ char host[MAXHOSTNAMELEN];
 #define REQUEST_SIZE 2048
 char request[REQUEST_SIZE];
 
+/* 
+ *struct option
+ *	{
+ *		const char *name;
+ *		int has_arg;
+ *		int *flag;
+ *		int val;
+ *	}
+ * name 选项名, 如："help"、"version"等
+ * has_arg 描述长选项是否有选项参数，一般为 no_argument(0)/required_argument(1)/optional_argument(2) 
+ * flag, 如果flag为NULL, 则 getopt_long返回 val 字段的值;
+ *       如果flag不为NULL, 则 *flag = val, 即 val值填入到 *flag中；
+ */
 static const struct option long_options[]=
 {
     {"force",no_argument,&force,1},
@@ -114,7 +127,13 @@ int main(int argc, char *argv[])
         usage();
         return 2;
     } 
-
+ /*
+  * linux 下多参数输入，嗯，这个函数非常棒！以后就用它了；
+  *     这里要注意两个全局变量 optarg, optind (都定义在 getopt.h 中)， 
+  *     当处理一个带参数的选项时，optarg会指向它的参数， 例如(n是带参数的)，-n 100; 此时optarg = 100；
+  *     当函数分析完所有参数时，全局变量optind会指向第一个非选项的位置(索引从零开始)，
+  *				例如(标准输入数据是 xxx --a -b 100 时) optind = 4;
+ */
     while((opt=getopt_long(argc,argv,"912Vfrt:p:c:?h",long_options,&options_index))!=EOF )
     {
         switch(opt)
